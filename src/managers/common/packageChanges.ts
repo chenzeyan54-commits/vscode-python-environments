@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import { Package, PackageChangeKind, PackageManager, PythonEnvironment } from '../../api';
+import { Package, PackageChangeKind, PackageManager, PackageOperationContext, PythonEnvironment } from '../../api';
 import { normalizePackageName } from './packageUtils';
 
 /**
@@ -49,6 +49,7 @@ export function getPackageChanges(before: Package[], after: Package[]): { kind: 
  * @param before The package snapshot from before the operation.
  * @param onChanges Callback invoked when package changes are detected.
  * @param fetchPackages Optional internal fetcher for operation-specific refresh behavior.
+ * @param context Optional project context for the operation.
  */
 export async function updatePackagesAndNotify(
     packageManager: PackageManager,
@@ -56,11 +57,12 @@ export async function updatePackagesAndNotify(
     before: Package[] | undefined,
     onChanges: PackageChangesCallback,
     fetchPackages?: PackageFetcher,
+    context?: PackageOperationContext,
 ): Promise<Package[] | undefined> {
     const [after, afterDirectDependenciesNames] = await Promise.all([
-        fetchPackages?.() ?? packageManager.getPackages(environment, { skipCache: true }),
+        fetchPackages?.() ?? packageManager.getPackages(environment, { skipCache: true }, context),
         // Handle transitive dependencies (best-effort, don't break package refresh on failure)
-        packageManager.getDirectPackageNames?.(environment).catch(() => undefined),
+        packageManager.getDirectPackageNames?.(environment, context).catch(() => undefined),
     ]);
 
     if (after === undefined) {

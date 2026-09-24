@@ -646,6 +646,16 @@ export interface DidChangePackagesEventArgs {
 }
 
 /**
+ * Context identifying the project from which a package operation originated.
+ */
+export interface PackageOperationContext {
+    /**
+     * The project associated with the package operation, when one is available.
+     */
+    readonly projectUri?: Uri;
+}
+
+/**
  * Interface representing a package manager.
  */
 export interface PackageManager {
@@ -683,24 +693,35 @@ export interface PackageManager {
      * Installs/Uninstall packages in the specified Python environment.
      * @param environment - The Python environment in which to install packages.
      * @param options - Options for managing packages.
+     * @param context - Optional project context for the operation.
      * @returns A promise that resolves when the installation is complete.
      */
-    manage(environment: PythonEnvironment, options: PackageManagementOptions): Promise<void>;
+    manage(
+        environment: PythonEnvironment,
+        options: PackageManagementOptions,
+        context?: PackageOperationContext,
+    ): Promise<void>;
 
     /**
      * Refreshes the package list for the specified Python environment.
      * @param environment - The Python environment for which to refresh the package list.
+     * @param context - Optional project context for the operation.
      * @returns A promise that resolves when the refresh is complete.
      */
-    refresh(environment: PythonEnvironment): Promise<void>;
+    refresh(environment: PythonEnvironment, context?: PackageOperationContext): Promise<void>;
 
     /**
      * Retrieves the list of packages for the specified Python environment.
      * @param environment - The Python environment for which to retrieve packages.
      * @param options - Optional settings for package retrieval.
+     * @param context - Optional project context for the operation.
      * @returns An array of packages, or undefined if the packages could not be retrieved.
      */
-    getPackages(environment: PythonEnvironment, options?: GetPackagesOptions): Promise<Package[] | undefined>;
+    getPackages(
+        environment: PythonEnvironment,
+        options?: GetPackagesOptions,
+        context?: PackageOperationContext,
+    ): Promise<Package[] | undefined>;
 
     /**
      * Returns additional filesystem patterns to watch for package install/uninstall changes.
@@ -728,9 +749,13 @@ export interface PackageManager {
      * depends on it. This is a best-effort approximation.
      *
      * @param environment - The Python environment for which to fetch direct package names.
+     * @param context - Optional project context for the operation.
      * @returns A promise that resolves to a set of package name strings, or undefined if not supported.
      */
-    getDirectPackageNames?(environment: PythonEnvironment): Promise<Set<string> | undefined>;
+    getDirectPackageNames?(
+        environment: PythonEnvironment,
+        context?: PackageOperationContext,
+    ): Promise<Set<string> | undefined>;
 
     /**
      * Clears the package manager's cache.

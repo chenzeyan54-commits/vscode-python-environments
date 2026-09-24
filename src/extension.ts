@@ -367,7 +367,11 @@ export async function activate(context: ExtensionContext): Promise<PythonEnviron
                 return;
             }
             try {
-                resolved.packageManager.manage(resolved.environment, { install: [] });
+                resolved.packageManager.manage(
+                    resolved.environment,
+                    { install: [] },
+                    { projectUri: resolved.projectUri },
+                );
             } catch (err) {
                 traceError('Error when running command python-envs.packages', err);
             }

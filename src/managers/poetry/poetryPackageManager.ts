@@ -20,6 +20,7 @@ import {
     Package,
     PackageManagementOptions,
     PackageManager,
+    PackageOperationContext,
     PackageVersionLookupNotSupportedError,
     PythonEnvironment,
     PythonEnvironmentApi,
@@ -60,7 +61,11 @@ export class PoetryPackageManager implements PackageManager, Disposable {
     readonly tooltip?: string | MarkdownString;
     readonly iconPath?: IconPath;
 
-    async manage(environment: PythonEnvironment, options: PackageManagementOptions): Promise<void> {
+    async manage(
+        environment: PythonEnvironment,
+        options: PackageManagementOptions,
+        context?: PackageOperationContext,
+    ): Promise<void> {
         let toInstall: string[] = [...(options.install ?? [])];
         let toUninstall: string[] = [...(options.uninstall ?? [])];
 
@@ -89,7 +94,8 @@ export class PoetryPackageManager implements PackageManager, Disposable {
 
         const execute = async (token?: CancellationToken): Promise<void> => {
             try {
-                await this.runPoetryManage({ install: toInstall, uninstall: toUninstall }, token);
+                const cwd = await this.getPoetryCwd(environment, context);
+                await this.runPoetryManage({ install: toInstall, uninstall: toUninstall }, cwd, token);
                 await updatePackagesAndNotify(
                     this,
                     environment,
@@ -97,6 +103,8 @@ export class PoetryPackageManager implements PackageManager, Disposable {
                     (changes) => {
                         this._onDidChangePackages.fire({ environment, manager: this, changes });
                     },
+                    undefined,
+                    context,
                 );
             } catch (e) {
                 if (e instanceof CancellationError) {
@@ -130,7 +138,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         );
     }
 
-    async refresh(environment: PythonEnvironment): Promise<void> {
+    async refresh(environment: PythonEnvironment, context?: PackageOperationContext): Promise<void> {
         await withProgress(
             {
                 location: ProgressLocation.Window,
@@ -145,6 +153,8 @@ export class PoetryPackageManager implements PackageManager, Disposable {
                         (changes) => {
                             this._onDidChangePackages.fire({ environment, manager: this, changes });
                         },
+                        undefined,
+                        context,
                     );
                     this.packages.set(environment.envId.id, packages ?? []);
                 } catch (error) {
@@ -161,9 +171,13 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         );
     }
 
-    async getPackages(environment: PythonEnvironment, options?: GetPackagesOptions): Promise<Package[] | undefined> {
+    async getPackages(
+        environment: PythonEnvironment,
+        options?: GetPackagesOptions,
+        context?: PackageOperationContext,
+    ): Promise<Package[] | undefined> {
         if (options?.skipCache || !this.packages.has(environment.envId.id)) {
-            const packages = await this.fetchPackagesFromTool(environment);
+            const packages = await this.fetchPackagesFromTool(environment, context);
             this.packages.set(environment.envId.id, packages);
             return packages;
         }
@@ -182,10 +196,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         return await versionCmd.execute();
     }
 
-    async getPackageAvailableVersions(
-        _environment: PythonEnvironment,
-        _packageName: string,
-    ): Promise<Pep440Version[]> {
+    async getPackageAvailableVersions(_environment: PythonEnvironment, _packageName: string): Promise<Pep440Version[]> {
         throw new PackageVersionLookupNotSupportedError(
             'Poetry does not provide a package version lookup command supported by this extension.',
         );
@@ -203,6 +214,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
 
     private async runPoetryManage(
         options: { install?: string[]; uninstall?: string[] },
+        cwd: string | undefined,
         token?: CancellationToken,
     ): Promise<void> {
         const poetry = await getPoetry();
@@ -217,6 +229,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         if (options.uninstall && options.uninstall.length > 0) {
             const removeCmd = new PoetryRemoveCommand({
                 pythonExecutable: poetry,
+                cwd,
                 log: this.log,
             });
             const packages = parsePackageSpecs(options.uninstall);
@@ -227,6 +240,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         if (options.install && options.install.length > 0) {
             const addCmd = new PoetryAddCommand({
                 pythonExecutable: poetry,
+                cwd,
                 log: this.log,
             });
             const packages = parsePackageSpecs(options.install);
@@ -234,7 +248,10 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         }
     }
 
-    private async fetchPackagesFromTool(environment: PythonEnvironment): Promise<Package[]> {
+    private async fetchPackagesFromTool(
+        environment: PythonEnvironment,
+        context?: PackageOperationContext,
+    ): Promise<Package[]> {
         const poetry = await getPoetry();
         if (!poetry) {
             throw new Error(
@@ -244,7 +261,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
             );
         }
 
-        const cwd = await this.getPoetryCwd(environment);
+        const cwd = await this.getPoetryCwd(environment, context);
         const showCmd = new PoetryShowCommand({
             pythonExecutable: poetry,
             cwd,
@@ -259,12 +276,16 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         }
     }
 
-    async getDirectPackageNames(_environment: PythonEnvironment): Promise<Set<string> | undefined> {
+    async getDirectPackageNames(
+        environment: PythonEnvironment,
+        context?: PackageOperationContext,
+    ): Promise<Set<string> | undefined> {
         try {
             const poetry = await getPoetry();
             if (!poetry) {
                 return undefined;
             }
+            const cwd = await this.getPoetryCwd(environment, context);
             const showTopLevelCmd = new PoetryShowTopLevelCommand({
                 pythonExecutable: poetry,
                 log: this.log,
@@ -276,23 +297,21 @@ export class PoetryPackageManager implements PackageManager, Disposable {
         }
     }
 
-    private async getPoetryCwd(environment: PythonEnvironment): Promise<string | undefined> {
+    private async getPoetryCwd(
+        environment: PythonEnvironment,
+        context?: PackageOperationContext,
+    ): Promise<string | undefined> {
+        if (context?.projectUri) {
+            return this.toProjectDirectory(context.projectUri.fsPath);
+        }
+
         const projects = this.api.getPythonProjects();
         if (projects.length === 0) {
             return undefined;
         }
 
-        const toDirectory = async (fsPath: string): Promise<string> => {
-            try {
-                const stat = await fsapi.stat(fsPath);
-                return stat.isDirectory() ? fsPath : path.dirname(fsPath);
-            } catch {
-                return path.dirname(fsPath);
-            }
-        };
-
         if (projects.length === 1) {
-            return toDirectory(projects[0].uri.fsPath);
+            return this.toProjectDirectory(projects[0].uri.fsPath);
         }
 
         const matchingDirectories = new Set<string>();
@@ -300,11 +319,20 @@ export class PoetryPackageManager implements PackageManager, Disposable {
             projects.map(async (project) => {
                 const projectEnvironment = await this.api.getEnvironment(project.uri);
                 if (projectEnvironment?.envId.id === environment.envId.id) {
-                    matchingDirectories.add(await toDirectory(project.uri.fsPath));
+                    matchingDirectories.add(await this.toProjectDirectory(project.uri.fsPath));
                 }
             }),
         );
 
         return Array.from(matchingDirectories).sort((a, b) => b.length - a.length)[0];
+    }
+
+    private async toProjectDirectory(fsPath: string): Promise<string> {
+        try {
+            const stat = await fsapi.stat(fsPath);
+            return stat.isDirectory() ? fsPath : path.dirname(fsPath);
+        } catch {
+            return path.dirname(fsPath);
+        }
     }
 }

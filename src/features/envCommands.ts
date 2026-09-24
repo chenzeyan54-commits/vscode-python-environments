@@ -344,7 +344,9 @@ export async function handlePackageUninstall(context: unknown, em: EnvironmentMa
         const moduleName = context.pkg.name;
         const environment = context.parent.environment;
         const packageManager = em.getPackageManager(environment);
-        await packageManager?.manage(environment, { uninstall: [moduleName], install: [] });
+        const operationContext =
+            context instanceof ProjectPackage ? { projectUri: context.parent.parent.project.uri } : undefined;
+        await packageManager?.manage(environment, { uninstall: [moduleName], install: [] }, operationContext);
         return;
     }
     traceError(`Invalid context for uninstall command: ${typeof context}`);
@@ -432,10 +434,16 @@ export async function managePackageVersion(context: unknown, em: EnvironmentMana
             return;
         }
 
-        await packageManager.manage(environment, {
-            install: [packageManager.formatInstallSpec(pkg.name, version)],
-            uninstall: [],
-        });
+        const operationContext =
+            context instanceof ProjectPackage ? { projectUri: context.parent.parent.project.uri } : undefined;
+        await packageManager.manage(
+            environment,
+            {
+                install: [packageManager.formatInstallSpec(pkg.name, version)],
+                uninstall: [],
+            },
+            operationContext,
+        );
     } else {
         traceError(`Invalid context for manage package version command: ${typeof context}`);
     }
@@ -756,6 +764,7 @@ export async function getPackageCommandOptions(
 ): Promise<{
     packageManager: InternalPackageManager;
     environment: PythonEnvironment;
+    projectUri?: Uri;
 }> {
     const options = await resolvePackageCommandOptions(e, em, pm);
     // The tree view hides package actions for inline-script environments, but the command palette
@@ -773,6 +782,7 @@ async function resolvePackageCommandOptions(
 ): Promise<{
     packageManager: InternalPackageManager;
     environment: PythonEnvironment;
+    projectUri?: Uri;
 }> {
     if (e === undefined) {
         const project = await pickProject(pm.getProjects());
@@ -785,7 +795,7 @@ async function resolvePackageCommandOptions(
         const environment = e.environment;
         const packageManager = em.getPackageManager(e.parent.project.uri);
         if (packageManager) {
-            return { environment, packageManager };
+            return { environment, packageManager, projectUri: e.parent.project.uri };
         }
     }
 
@@ -801,7 +811,7 @@ async function resolvePackageCommandOptions(
         const environment = await em.getEnvironmentManager(e)?.get(e);
         const packageManager = em.getPackageManager(e);
         if (environment && packageManager) {
-            return { environment, packageManager };
+            return { environment, packageManager, projectUri: e };
         }
     }
 

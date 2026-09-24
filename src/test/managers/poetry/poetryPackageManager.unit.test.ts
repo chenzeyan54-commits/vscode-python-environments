@@ -15,6 +15,8 @@ import * as poetryUtils from '../../../managers/poetry/poetryUtils';
 import { createMockPythonEnvironment } from '../../mocks/pythonEnvironment';
 
 suite('PoetryPackageManager', () => {
+    const projectFile = path.join(process.cwd(), 'project', 'pyproject.toml');
+    const projectDirectory = Uri.file(path.dirname(projectFile)).fsPath;
     const environment = createMockPythonEnvironment({
         envPath: path.join(process.cwd(), '.venv'),
         managerId: 'ms-python.python:poetry',
@@ -28,7 +30,7 @@ suite('PoetryPackageManager', () => {
             getPythonProjects: () => [
                 {
                     name: 'project',
-                    uri: Uri.file(path.join(process.cwd(), 'project', 'pyproject.toml')),
+                    uri: Uri.file(projectFile),
                 },
             ],
         } as unknown as PythonEnvironmentApi;
@@ -52,19 +54,28 @@ suite('PoetryPackageManager', () => {
         sinon.restore();
     });
 
-    test('package management inherits the process working directory', async () => {
+    test('package management uses the inferred project directory', async () => {
         await manager.manage(environment, { install: ['requests'], uninstall: ['flask'] });
 
         assert.strictEqual(runPoetryStub.callCount, 2);
-        assert.strictEqual(runPoetryStub.firstCall.args[1], undefined);
-        assert.strictEqual(runPoetryStub.secondCall.args[1], undefined);
+        assert.strictEqual(runPoetryStub.firstCall.args[1], projectDirectory);
+        assert.strictEqual(runPoetryStub.secondCall.args[1], projectDirectory);
     });
 
-    test('direct package listing inherits the process working directory', async () => {
+    test('direct package listing uses the inferred project directory', async () => {
         await manager.getDirectPackageNames(environment);
 
         assert.strictEqual(runPoetryStub.callCount, 1);
-        assert.strictEqual(runPoetryStub.firstCall.args[1], undefined);
+        assert.strictEqual(runPoetryStub.firstCall.args[1], projectDirectory);
+    });
+
+    test('explicit project context takes precedence over project inference', async () => {
+        const explicitProjectFile = path.join(process.cwd(), 'nested', 'pyproject.toml');
+
+        await manager.getDirectPackageNames(environment, { projectUri: Uri.file(explicitProjectFile) });
+
+        assert.strictEqual(runPoetryStub.callCount, 1);
+        assert.strictEqual(runPoetryStub.firstCall.args[1], Uri.file(path.dirname(explicitProjectFile)).fsPath);
     });
 
     test('package loading returns an empty list when poetry show fails', async () => {

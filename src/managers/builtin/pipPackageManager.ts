@@ -19,6 +19,7 @@ import {
     Package,
     PackageManagementOptions,
     PackageManager,
+    PackageOperationContext,
     PackageVersionLookupNotSupportedError,
     PythonEnvironment,
     PythonEnvironmentApi,
@@ -71,7 +72,11 @@ export class PipPackageManager implements PackageManager, Disposable {
     readonly tooltip?: string | MarkdownString;
     readonly iconPath?: IconPath;
 
-    async manage(environment: PythonEnvironment, options: PackageManagementOptions): Promise<void> {
+    async manage(
+        environment: PythonEnvironment,
+        options: PackageManagementOptions,
+        _context?: PackageOperationContext,
+    ): Promise<void> {
         let toInstall: string[] = [...(options.install ?? [])];
         let toUninstall: string[] = [...(options.uninstall ?? [])];
 
@@ -177,7 +182,7 @@ export class PipPackageManager implements PackageManager, Disposable {
         );
     }
 
-    async refresh(environment: PythonEnvironment): Promise<void> {
+    async refresh(environment: PythonEnvironment, _context?: PackageOperationContext): Promise<void> {
         await withProgress(
             {
                 location: ProgressLocation.Window,
@@ -199,7 +204,11 @@ export class PipPackageManager implements PackageManager, Disposable {
         );
     }
 
-    async getPackages(environment: PythonEnvironment, options?: GetPackagesOptions): Promise<Package[] | undefined> {
+    async getPackages(
+        environment: PythonEnvironment,
+        options?: GetPackagesOptions,
+        _context?: PackageOperationContext,
+    ): Promise<Package[] | undefined> {
         if (options?.skipCache || !this.packages.has(environment.envId.id)) {
             return this.fetchPackages(environment);
         }
@@ -321,7 +330,10 @@ export class PipPackageManager implements PackageManager, Disposable {
      * dependency tree), not necessarily packages the user explicitly installed. pip/uv
      * do not track install intent.
      */
-    async getDirectPackageNames(environment: PythonEnvironment): Promise<Set<string> | undefined> {
+    async getDirectPackageNames(
+        environment: PythonEnvironment,
+        _context?: PackageOperationContext,
+    ): Promise<Set<string> | undefined> {
         const pythonExecutable = environment.execInfo?.run?.executable;
         if (!pythonExecutable) {
             return undefined;

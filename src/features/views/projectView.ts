@@ -245,8 +245,9 @@ export class ProjectView implements TreeDataProvider<ProjectTreeItem> {
                 return [new ProjectEnvironmentInfo(environmentItem, ProjectViews.noPackageManager)];
             }
 
-            await pkgManager.refresh(environment);
-            const packages = await pkgManager.getPackages(environment);
+            const context = { projectUri: uri };
+            await pkgManager.refresh(environment, context);
+            const packages = await pkgManager.getPackages(environment, undefined, context);
             if (!packages) {
                 return [new ProjectEnvironmentInfo(environmentItem, ProjectViews.noPackages)];
             }

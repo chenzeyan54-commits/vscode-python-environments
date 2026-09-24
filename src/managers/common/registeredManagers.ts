@@ -26,6 +26,7 @@ import type {
     Package,
     PackageManagementOptions,
     PackageManager,
+    PackageOperationContext,
     PythonEnvironment,
     QuickCreateConfig,
     RefreshEnvironmentsScope,
@@ -234,11 +235,15 @@ export class InternalPackageManager implements PackageManager {
         return this.manager.log;
     }
 
-    async manage(environment: PythonEnvironment, options: PackageManagementOptions): Promise<void> {
+    async manage(
+        environment: PythonEnvironment,
+        options: PackageManagementOptions,
+        context?: PackageOperationContext,
+    ): Promise<void> {
         const stopWatch = new StopWatch();
         const triggerSource = inferPackageManagementTrigger(options);
         try {
-            await this.manager.manage(environment, options);
+            await this.manager.manage(environment, options, context);
             sendTelemetryEvent(EventNames.PACKAGE_MANAGEMENT, stopWatch.elapsedTime, {
                 managerId: this.id,
                 result: 'success',
@@ -263,12 +268,16 @@ export class InternalPackageManager implements PackageManager {
         }
     }
 
-    refresh(environment: PythonEnvironment): Promise<void> {
-        return this.manager.refresh(environment);
+    refresh(environment: PythonEnvironment, context?: PackageOperationContext): Promise<void> {
+        return this.manager.refresh(environment, context);
     }
 
-    getPackages(environment: PythonEnvironment, options?: GetPackagesOptions): Promise<Package[] | undefined> {
-        return this.manager.getPackages(environment, options);
+    getPackages(
+        environment: PythonEnvironment,
+        options?: GetPackagesOptions,
+        context?: PackageOperationContext,
+    ): Promise<Package[] | undefined> {
+        return this.manager.getPackages(environment, options, context);
     }
 
     getPackageWatchTargets(environment: PythonEnvironment): RelativePattern[] {
@@ -328,9 +337,12 @@ export class InternalPackageManager implements PackageManager {
         }
     }
 
-    getDirectPackageNames(environment: PythonEnvironment): Promise<Set<string> | undefined> {
+    getDirectPackageNames(
+        environment: PythonEnvironment,
+        context?: PackageOperationContext,
+    ): Promise<Set<string> | undefined> {
         return this.manager.getDirectPackageNames
-            ? this.manager.getDirectPackageNames(environment)
+            ? this.manager.getDirectPackageNames(environment, context)
             : Promise.resolve(undefined);
     }
 

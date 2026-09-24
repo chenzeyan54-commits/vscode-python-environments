@@ -19,6 +19,7 @@ import {
     Package,
     PackageManagementOptions,
     PackageManager,
+    PackageOperationContext,
     PythonEnvironment,
     PythonEnvironmentApi,
 } from '../../api';
@@ -59,7 +60,11 @@ export class CondaPackageManager implements PackageManager, Disposable {
     tooltip?: string | MarkdownString;
     iconPath?: IconPath;
 
-    async manage(environment: PythonEnvironment, options: PackageManagementOptions): Promise<void> {
+    async manage(
+        environment: PythonEnvironment,
+        options: PackageManagementOptions,
+        _context?: PackageOperationContext,
+    ): Promise<void> {
         let toInstall: string[] = [...(options.install ?? [])];
         let toUninstall: string[] = [...(options.uninstall ?? [])];
 
@@ -139,7 +144,7 @@ export class CondaPackageManager implements PackageManager, Disposable {
         );
     }
 
-    async refresh(environment: PythonEnvironment): Promise<void> {
+    async refresh(environment: PythonEnvironment, _context?: PackageOperationContext): Promise<void> {
         await withProgress(
             {
                 location: ProgressLocation.Window,
@@ -162,7 +167,11 @@ export class CondaPackageManager implements PackageManager, Disposable {
         );
     }
 
-    async getPackages(environment: PythonEnvironment, options?: GetPackagesOptions): Promise<Package[] | undefined> {
+    async getPackages(
+        environment: PythonEnvironment,
+        options?: GetPackagesOptions,
+        _context?: PackageOperationContext,
+    ): Promise<Package[] | undefined> {
         if (options?.skipCache || !this.packages.has(environment.envId.id)) {
             return (await this.fetchPackages(environment)) ?? [];
         }
