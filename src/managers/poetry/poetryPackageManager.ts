@@ -289,6 +289,7 @@ export class PoetryPackageManager implements PackageManager, Disposable {
             const showTopLevelCmd = new PoetryShowTopLevelCommand({
                 pythonExecutable: poetry,
                 log: this.log,
+                cwd,
             });
             return await showTopLevelCmd.execute();
         } catch (err) {
