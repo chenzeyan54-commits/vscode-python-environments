@@ -218,11 +218,13 @@ suite('Package Watcher', () => {
 
             const env = createMockEnvironment();
             const packageManager = createMockPackageManager();
+            const projectUri = Uri.file('/path/to/project');
 
             watchPackageChangesForEnvironment(
                 env,
                 packageManager as PackageManager,
                 mockLogOutputChannel as LogOutputChannel,
+                { projectUri },
             );
 
             // Fire a create event and advance past debounce
@@ -234,6 +236,10 @@ suite('Package Watcher', () => {
                 (packageManager.refresh as sinon.SinonStub).callCount,
                 1,
                 'Should call refresh on file create',
+            );
+            assert.ok(
+                (packageManager.refresh as sinon.SinonStub).calledOnceWithExactly(env, { projectUri }),
+                'Should pass the project context to refresh',
             );
 
             clock.restore();
@@ -380,7 +386,7 @@ suite('Package Watcher', () => {
             );
         });
 
-        test('should retain a shared environment watcher until all scopes release it', () => {
+        test('should use separate environment watchers for different project scopes', () => {
             const mockWatcher = createMockWatcher();
             createFileSystemWatcherStub.returns(mockWatcher);
             const environmentChanges = new EventEmitter<DidChangeEnvironmentEventArgs>();
@@ -397,13 +403,13 @@ suite('Package Watcher', () => {
             environmentChanges.fire({ uri: firstScope, new: env, old: undefined });
             environmentChanges.fire({ uri: secondScope, new: env, old: undefined });
 
-            assert.strictEqual(createFileSystemWatcherStub.callCount, 1, 'Should share one environment watcher');
+            assert.strictEqual(createFileSystemWatcherStub.callCount, 2, 'Should create one watcher per project scope');
 
             environmentChanges.fire({ uri: firstScope, new: undefined, old: env });
-            assert.ok(!(mockWatcher.dispose as sinon.SinonStub).called, 'Should retain watcher for the second scope');
+            assert.ok((mockWatcher.dispose as sinon.SinonStub).calledOnce, 'Should dispose the first project watcher');
 
             environmentChanges.fire({ uri: secondScope, new: undefined, old: env });
-            assert.ok((mockWatcher.dispose as sinon.SinonStub).called, 'Should dispose watcher after the final scope');
+            assert.ok((mockWatcher.dispose as sinon.SinonStub).calledTwice, 'Should dispose the second project watcher');
         });
 
         test('should stop watching an environment when the active environment changes', () => {
@@ -461,7 +467,7 @@ suite('Package Watcher', () => {
             assert.strictEqual(createFileSystemWatcherStub.callCount, 2);
         });
 
-        test('should refresh a shared environment watcher only once per file event', async () => {
+        test('should refresh each project-scoped environment watcher once per file event', async () => {
             const clock = sandbox.useFakeTimers();
             const mockWatcher = createMockWatcher();
             createFileSystemWatcherStub.returns(mockWatcher);
@@ -480,7 +486,7 @@ suite('Package Watcher', () => {
             mockWatcher._changeEmitter.fire(Uri.file('/path/to/pkg.dist-info/METADATA'));
             await clock.tickAsync(600);
 
-            assert.strictEqual((packageManager.refresh as sinon.SinonStub).callCount, 1);
+            assert.strictEqual((packageManager.refresh as sinon.SinonStub).callCount, 2);
         });
 
         test('should watch an environment activated only in a terminal', () => {

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { Disposable, Event, LogOutputChannel, RelativePattern, Terminal, Uri } from 'vscode';
-import { PackageManager, PythonEnvironment } from '../../api';
+import { PackageManager, PackageOperationContext, PythonEnvironment } from '../../api';
 import { createSimpleDebounce } from '../../common/utils/debounce';
 import { onDidCloseTerminal } from '../../common/window.apis';
 import { createFileSystemWatcher, getConfiguration, onDidChangeConfiguration } from '../../common/workspace.apis';
@@ -45,12 +45,14 @@ function getDefaultPackageWatchTargets(env: PythonEnvironment): RelativePattern[
  * @param env - The Python environment to watch.
  * @param packageManager - The package manager to call refresh on when changes occur.
  * @param log - Logger for diagnostic messages.
+ * @param context - Optional project context for package refreshes.
  * @returns A disposable that removes the watcher when disposed.
  */
 export function watchPackageChangesForEnvironment(
     env: PythonEnvironment,
     packageManager: PackageManager,
     log: LogOutputChannel,
+    context?: PackageOperationContext,
 ): Disposable {
     const watchTargets = [
         ...getDefaultPackageWatchTargets(env),
@@ -63,7 +65,7 @@ export function watchPackageChangesForEnvironment(
 
     const debouncedRefresh = createSimpleDebounce(500, () => {
         log.debug(`Package change detected for environment ${env.envId.id}, refreshing packages.`);
-        void packageManager.refresh(env).catch((ex) => {
+        void packageManager.refresh(env, context).catch((ex) => {
             log.error(
                 `Failed to refresh packages for environment ${env.envId.id}: ${ex instanceof Error ? ex.message : String(ex)}`,
             );
@@ -94,8 +96,8 @@ export function watchPackageChangesForEnvironment(
 /**
  * Registers package watchers for every active environment, regardless of manager type.
  *
- * A watcher is shared when the same environment is active in multiple scopes and is
- * disposed only after the final scope stops using that environment.
+ * A watcher is shared when the same environment and project scope are active for multiple
+ * consumers and is disposed only after the final consumer releases it.
  *
  * @param envManagers - The central environment and package manager registry.
  * @param terminalActivation - Tracks environments activated in terminals.
@@ -153,7 +155,8 @@ export function registerPackageWatchers(
             return;
         }
 
-        const watcherKey = `${environment.envId.managerId}:${environment.envId.id}:${selectedPackageManager.id}`;
+        const projectUri = packageManagerContext instanceof Uri ? packageManagerContext : undefined;
+        const watcherKey = `${environment.envId.managerId}:${environment.envId.id}:${selectedPackageManager.id}:${projectUri?.toString() ?? 'unscoped'}`;
         if (activeWatcherByConsumer.get(consumer) === watcherKey) {
             return;
         }
@@ -165,7 +168,9 @@ export function registerPackageWatchers(
             sharedWatcher.references += 1;
         } else {
             sharedWatchers.set(watcherKey, {
-                disposable: watchPackageChangesForEnvironment(environment, selectedPackageManager, log),
+                disposable: watchPackageChangesForEnvironment(environment, selectedPackageManager, log, {
+                    projectUri,
+                }),
                 references: 1,
             });
         }
