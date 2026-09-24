@@ -245,7 +245,7 @@ suite('PythonPackageManagerApi Tests', () => {
             testError.code = 'ENOTFOUND';
             testError.packageName = 'invalid-package';
             packageManager
-                .setup((pm) => pm.manage(environment.object, options))
+                .setup((pm) => pm.manage(environment.object, options, typeMoq.It.isAny()))
                 .returns(() => Promise.reject(testError));
 
             // Run & Assert - Should reject with same error and preserve error properties
@@ -266,11 +266,11 @@ suite('PythonPackageManagerApi Tests', () => {
             const uninstallOptions: PackageManagementOptions = { uninstall: ['pandas'] };
 
             packageManager
-                .setup((pm) => pm.manage(environment.object, installOptions))
+                .setup((pm) => pm.manage(environment.object, installOptions, typeMoq.It.isAny()))
                 .returns(() => new Promise((resolve) => setTimeout(resolve, 50)));
 
             packageManager
-                .setup((pm) => pm.manage(environment.object, uninstallOptions))
+                .setup((pm) => pm.manage(environment.object, uninstallOptions, typeMoq.It.isAny()))
                 .returns(() => new Promise((resolve) => setTimeout(resolve, 30)));
 
             // Run - Execute operations concurrently
@@ -304,7 +304,9 @@ suite('PythonPackageManagerApi Tests', () => {
         test('Should propagate errors from underlying package manager refresh', async () => {
             // Mock - Set up package manager to fail on refresh
             const testError = new Error('Refresh failed');
-            packageManager.setup((pm) => pm.refresh(environment.object)).returns(() => Promise.reject(testError));
+            packageManager
+                .setup((pm) => pm.refresh(environment.object, typeMoq.It.isAny()))
+                .returns(() => Promise.reject(testError));
 
             // Run & Assert - Should reject with same error
             await assert.rejects(
@@ -343,7 +345,9 @@ suite('PythonPackageManagerApi Tests', () => {
                 },
             ];
             packageManager
-                .setup((pm) => pm.getPackages(environment.object, typeMoq.It.isAny()))
+                .setup((pm) =>
+                    pm.getPackages(environment.object, typeMoq.It.isAny(), typeMoq.It.isAny()),
+                )
                 .returns(() => Promise.resolve(mockPackages))
                 .verifiable(typeMoq.Times.once());
 
@@ -360,7 +364,9 @@ suite('PythonPackageManagerApi Tests', () => {
         test('Should return undefined when no packages found', async () => {
             // Mock - Package manager returns undefined
             packageManager
-                .setup((pm) => pm.getPackages(environment.object, typeMoq.It.isAny()))
+                .setup((pm) =>
+                    pm.getPackages(environment.object, typeMoq.It.isAny(), typeMoq.It.isAny()),
+                )
                 .returns(() => Promise.resolve(undefined))
                 .verifiable(typeMoq.Times.once());
 
@@ -375,7 +381,9 @@ suite('PythonPackageManagerApi Tests', () => {
         test('Should return empty array when environment has no packages', async () => {
             // Mock - Package manager returns empty array
             packageManager
-                .setup((pm) => pm.getPackages(environment.object, typeMoq.It.isAny()))
+                .setup((pm) =>
+                    pm.getPackages(environment.object, typeMoq.It.isAny(), typeMoq.It.isAny()),
+                )
                 .returns(() => Promise.resolve([]))
                 .verifiable(typeMoq.Times.once());
 
@@ -402,7 +410,9 @@ suite('PythonPackageManagerApi Tests', () => {
                 },
             ];
             packageManager
-                .setup((pm) => pm.getPackages(environment.object, typeMoq.It.isAny()))
+                .setup((pm) =>
+                    pm.getPackages(environment.object, typeMoq.It.isAny(), typeMoq.It.isAny()),
+                )
                 .returns(() => Promise.resolve(mockPackages));
 
             // Run
@@ -423,7 +433,9 @@ suite('PythonPackageManagerApi Tests', () => {
             // Mock - Package manager throws error
             const testError = new Error('Failed to get packages');
             packageManager
-                .setup((pm) => pm.getPackages(environment.object, typeMoq.It.isAny()))
+                .setup((pm) =>
+                    pm.getPackages(environment.object, typeMoq.It.isAny(), typeMoq.It.isAny()),
+                )
                 .returns(() => Promise.reject(testError));
 
             // Run & Assert - Should reject with same error
